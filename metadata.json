@@ -1,0 +1,9 @@
+{
+  "name": "Cara - Professional AI Coach",
+  "description": "An AI-powered communication coach helping professionals master American English nuances, accent, and corporate culture.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
