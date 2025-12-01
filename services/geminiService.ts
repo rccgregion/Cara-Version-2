@@ -1,11 +1,10 @@
 import { GoogleGenAI, Modality, LiveServerMessage } from "@google/genai";
+import { processPrompt as backendProcessPrompt } from "./api";
 
+// Use backend proxy instead of direct API access
 const getClient = () => {
-  const apiKey = process.env.API_KEY || sessionStorage.getItem('cara_api_key');
-  if (!apiKey) {
-    throw new Error("API_KEY_MISSING");
-  }
-  return new GoogleGenAI({ apiKey });
+  // No longer need direct API access - backend handles it
+  return null; // Deprecated
 };
 
 const safeParseJSON = (text: string) => {

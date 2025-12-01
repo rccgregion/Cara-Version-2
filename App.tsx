@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
+import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -27,6 +27,10 @@ import ConversationSim from './components/ConversationSim';
 import VideoPractice from './components/VideoPractice';
 import { UserProfile } from './types';
 import { UserContext } from './UserContext';
+import { loginUser, registerUser, getAccessToken, setAuthTokens } from './services/api';
+
+// Google OAuth Client ID (set VITE_GOOGLE_CLIENT_ID in .env file)
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 // --- Toast System ---
 type ToastType = 'success' | 'error' | 'info';
@@ -56,55 +60,167 @@ const ToastContainer = ({ toasts }: { toasts: Toast[] }) => (
   </div>
 );
 
-const Background = () => (
-  <div className="fixed inset-0 -z-10 bg-[#fafaf9]">
-    <div className="absolute inset-0 bg-grain opacity-50" />
-    <div className="absolute top-0 right-0 w-[50vw] h-[50vh] bg-gradient-to-bl from-indigo-100/30 to-transparent blur-[120px]" />
-    <div className="absolute bottom-0 left-0 w-[50vw] h-[50vh] bg-gradient-to-tr from-teal-100/30 to-transparent blur-[120px]" />
-  </div>
-);
-
-const SidebarItem = ({ to, icon: Icon, label, active }: { to: string, icon: any, label: string, active: boolean }) => (
-  <Link to={to} className={`group flex items-center gap-4 px-4 py-3 transition-all duration-300 border-l-2 ${active ? 'border-teal-800 text-teal-900 bg-stone-100' : 'border-transparent text-stone-500 hover:text-stone-900 hover:bg-stone-50'}`}>
-    <Icon size={20} className={active ? "text-teal-800" : "text-stone-400 group-hover:text-stone-700"} strokeWidth={1.5} />
-    <span className={`text-sm tracking-wide ${active ? 'font-serif font-semibold italic' : 'font-sans font-medium'}`}>{label}</span>
-    {active && <ChevronRight size={14} className="ml-auto text-teal-800/50" />}
-  </Link>
-);
-
-const ApiKeyModal = ({ onComplete }: { onComplete: () => void }) => {
-    const [key, setKey] = useState('');
-    const handleSubmit = () => {
-        if (key) {
-            sessionStorage.setItem('cara_api_key', key);
-            onComplete();
-        }
-    };
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-stone-900/90 backdrop-blur-sm p-4">
-             <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white max-w-md w-full p-10 shadow-2xl border border-stone-200"
-            >
-                <div className="mb-8">
-                    <h2 className="text-3xl font-serif font-bold text-stone-900 mb-2">Access Required</h2>
-                    <p className="text-stone-500 font-sans text-sm leading-relaxed">This professional tool requires a valid Google Gemini API key. Stored locally for session only.</p>
+                {/* Social Login Section */}
+                <div className="mb-6 flex flex-col gap-3">
+                  {GOOGLE_CLIENT_ID ? (
+                    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                      <GoogleLogin
+                        onSuccess={credentialResponse => {
+                          // TODO: Send credentialResponse.credential to backend for verification and login
+                          // onComplete(user) after backend verification
+                          console.log('Google login success:', credentialResponse);
+                          setError('Google OAuth integration required on backend');
+                        }}
+                        onError={() => {
+                          setError('Google login failed');
+                        }}
+                        width="100%"
+                        useOneTap
+                      />
+                    </GoogleOAuthProvider>
+                  ) : (
+                    <button className="w-full py-3 rounded-md border border-stone-200 bg-white text-stone-500 font-sans font-medium text-xs flex items-center justify-center gap-2 opacity-50 cursor-not-allowed" disabled>
+                      Google Login (requires VITE_GOOGLE_CLIENT_ID env var)
+                    </button>
+                  )}
+                  {/* Placeholder for other providers */}
+                  <button className="w-full py-3 rounded-md border border-stone-200 bg-white text-stone-700 font-sans font-medium text-sm flex items-center justify-center gap-2 opacity-60 cursor-not-allowed" disabled>
+                    <svg width="20" height="20" fill="currentColor" className="inline-block"><rect width="20" height="20" rx="3" fill="#333"/></svg>
+                    GitHub Login (coming soon)
+                  </button>
                 </div>
-                <div className="space-y-6">
-                    <input 
-                        type="password" 
-                        value={key} 
-                        onChange={(e) => setKey(e.target.value)} 
-                        className="input-editorial"
-                        placeholder="Paste API Key..."
-                        autoFocus
-                    />
-                    <button onClick={handleSubmit} disabled={!key} className="w-full bg-stone-900 text-stone-50 py-4 font-sans font-medium text-sm tracking-widest uppercase hover:bg-stone-800 disabled:opacity-50 transition-colors">Enter Studio</button>
+
+                <div className="space-y-4 mb-6">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Email"
+                    className="w-full px-4 py-3 border border-stone-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-700"
+                  />
+                  {!isLogin && (
+                    <>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Full Name"
+                        className="w-full px-4 py-3 border border-stone-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-700"
+                      />
+                      <input
+                        type="text"
+                        value={role}
+                        onChange={(e) => setRole(e.target.value)}
+                        placeholder="Professional Role"
+                        className="w-full px-4 py-3 border border-stone-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-700"
+                      />
+                    </>
+                  )}
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Password (min 8 characters)"
+                    className="w-full px-4 py-3 border border-stone-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-700"
+                  />
                 </div>
-            </motion.div>
+
+                {error && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-md text-rose-600 text-sm">
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit || loading}
+                  className="w-full bg-stone-900 text-stone-50 py-3 font-sans font-medium text-sm tracking-widest uppercase hover:bg-stone-800 disabled:opacity-50 transition-colors rounded-md"
+                >
+                  {loading ? 'Loading...' : isLogin ? 'Sign In' : 'Create Account'}
+                </button>
+
+                <div className="flex justify-between items-center mt-6">
+                  <button
+                    className="text-teal-700 hover:underline text-xs font-sans"
+                    onClick={() => setIsLogin(!isLogin)}
+                  >
+                    {isLogin ? "Don't have an account? Register" : 'Already have an account? Sign In'}
+                  </button>
+                </div>
+                {/*
+                  Wallet/MetaMask/Xverse errors are caused by browser extensions and cannot be fixed in app code.
+                  Advise users to disable these extensions if not needed.
+                */}
+              </motion.div>
+            </div>
+          );
+          <p className="text-stone-500 font-sans text-sm leading-relaxed">
+            {isLogin
+              ? 'Sign in to your professional coaching account'
+              : 'Create your account to start improving your communication'}
+          </p>
         </div>
-    );
+
+        <div className="space-y-4 mb-6">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            className="w-full px-4 py-3 border border-stone-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-700"
+          />
+          {!isLogin && (
+            <>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Full Name"
+                className="w-full px-4 py-3 border border-stone-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-700"
+              />
+              <input
+                type="text"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                placeholder="Professional Role"
+                className="w-full px-4 py-3 border border-stone-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-700"
+              />
+            </>
+          )}
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password (min 8 characters)"
+            className="w-full px-4 py-3 border border-stone-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-700"
+          />
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-md text-rose-600 text-sm">
+            {error}
+          </div>
+        )}
+
+        <button
+          onClick={handleSubmit}
+          disabled={!canSubmit || loading}
+          className="w-full bg-stone-900 text-stone-50 py-3 font-sans font-medium text-sm tracking-widest uppercase hover:bg-stone-800 disabled:opacity-50 transition-colors rounded-md"
+        >
+          {loading ? 'Loading...' : isLogin ? 'Sign In' : 'Create Account'}
+        </button>
+
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => setIsLogin(!isLogin)}
+            className="text-stone-500 text-sm hover:text-stone-900 transition-colors"
+          >
+            {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
 };
 
 const ROLES = [
@@ -241,7 +357,7 @@ const AnimatedRoutes = () => {
   );
 };
 
-const Layout = ({ children }: { children: React.ReactNode }) => {
+const Layout = ({ children, onLogout }: { children: React.ReactNode; onLogout?: () => void }) => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user } = useContext(UserContext);
@@ -269,7 +385,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <SidebarItem key={item.path} to={item.path} icon={item.icon} label={item.label} active={location.pathname === item.path} />
           ))}
         </div>
-        <div className="p-6 border-t border-stone-200">
+        <div className="p-6 border-t border-stone-200 space-y-4">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-stone-200 rounded-full overflow-hidden shrink-0 border border-stone-300 flex items-center justify-center">
               <User size={20} className="text-stone-500" />
@@ -279,6 +395,14 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               <p className="text-xs text-stone-500 truncate">{user.role}</p>
             </div>
           </div>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="w-full text-left text-xs text-rose-600 hover:text-rose-700 transition-colors font-medium"
+            >
+              Sign Out
+            </button>
+          )}
         </div>
       </aside>
 
@@ -346,7 +470,7 @@ const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
 const App = () => {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [hasApiKey, setHasApiKey] = useState(!!process.env.API_KEY || !!sessionStorage.getItem('cara_api_key'));
+  const [isAuthenticated, setIsAuthenticated] = useState(!!getAccessToken());
 
   const showToast = (message: string, type: ToastType = 'info') => {
     const id = Date.now();
@@ -354,8 +478,15 @@ const App = () => {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   };
 
-  const handleApiKeyComplete = () => {
-      setHasApiKey(true);
+  const handleAuthComplete = (user: any) => {
+    setIsAuthenticated(true);
+    showToast(`Welcome back, ${user.name}!`, 'success');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('cara_auth_token');
+    setIsAuthenticated(false);
+    showToast('Logged out successfully', 'info');
   };
 
   return (
@@ -365,15 +496,15 @@ const App = () => {
           <div className="antialiased text-stone-900 bg-[#fafaf9]">
             <ToastContainer toasts={toasts} />
             
-            {!hasApiKey ? (
-                <ApiKeyModal onComplete={handleApiKeyComplete} />
+            {!isAuthenticated ? (
+                <AuthModal onComplete={handleAuthComplete} />
             ) : (
                 <UserContext.Consumer>
                     {({ user, updateProfile }) => (
                         !user.hasOnboarded ? (
                             <OnboardingWizard onComplete={updateProfile} />
                         ) : (
-                            <Layout>
+                            <Layout onLogout={handleLogout}>
                                 <AnimatedRoutes />
                             </Layout>
                         )

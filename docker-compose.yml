@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: cara-postgres
+    environment:
+      POSTGRES_USER: cara_user
+      POSTGRES_PASSWORD: cara_password
+      POSTGRES_DB: cara_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cara_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: cara-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # Backend API
+  api:
+    build: ./backend
+    container_name: cara-api
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://cara_user:cara_password@postgres:5432/cara_db
+      JWT_SECRET: dev-secret-key-change-in-production
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      FRONTEND_URL: http://localhost:3000
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+    command: npm run dev
+
+  # Frontend
+  frontend:
+    image: node:20-alpine
+    container_name: cara-frontend
+    working_dir: /app
+    environment:
+      VITE_API_URL: http://localhost:3001/api
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/app
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  redis_data:

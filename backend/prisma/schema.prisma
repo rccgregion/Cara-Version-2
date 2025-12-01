@@ -1,0 +1,124 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users table
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      String   // Professional role
+  passwordHash String
+  
+  // Profile
+  level     Int      @default(1)
+  xp        Int      @default(0)
+  streak    Int      @default(0)
+  dailyGoalCompleted Boolean @default(false)
+  lastActiveAt DateTime?
+  
+  // Relations
+  sessions  Session[]
+  quotaUsage QuotaUsage[]
+  events    AnalyticsEvent[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// Session/Activity tracking
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Session metadata
+  featureType String // 'conversation', 'writing', 'accent', 'listening', 'video'
+  title     String?
+  description String?
+  
+  // Performance metrics
+  durationSeconds Int
+  score     Decimal  @default(0)
+  completed Boolean  @default(false)
+  
+  // Content
+  transcript String?
+  userResponses String? // JSON array of responses
+  feedbackJson Json?    // Structured feedback
+  
+  // Analysis metrics
+  clarity   Decimal?   // 0-100
+  pace      Decimal?   // 0-100
+  confidence Decimal?  // 0-100
+  tone      Decimal?   // 0-100
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([userId, createdAt])
+  @@map("sessions")
+}
+
+// Quota tracking
+model QuotaUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  tokensUsed Int
+  requestType String // 'gemini_chat', 'audio_analysis', etc.
+  
+  createdAt DateTime @default(now())
+  
+  @@index([userId, createdAt])
+  @@map("quota_usage")
+}
+
+// Analytics events
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  eventType String // 'feature_access', 'completion', 'error', etc.
+  metadata  Json?
+  
+  createdAt DateTime @default(now())
+  
+  @@index([userId, eventType, createdAt])
+  @@map("analytics_events")
+}
+
+// Structured feedback schema
+model Feedback {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  
+  // Overview
+  score     Decimal
+  scoreChange Decimal?
+  
+  // Breakdown by category
+  communication Json   // { clarity, pace, tone, etc. }
+  content   Json?     // { relevance, structure, etc. }
+  bodyLanguage Json?  // { posture, eye_contact, etc. }
+  
+  // Highlights & suggestions
+  highlights String? // JSON array of { timestamp, text, type }
+  actionItems String? // JSON array of suggestions
+  
+  createdAt DateTime @default(now())
+  
+  @@map("feedback")
+}
